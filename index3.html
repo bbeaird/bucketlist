@@ -45,15 +45,6 @@
             }
         });
 
-        var myList = new Apigee.Collection({
-            "client": client,
-            "type": "users/me/myitems",
-            "qs": {
-                "limit": 25,
-                "ql": "order by title"
-            }
-        })
-
         client.getLoggedInUser(function(err, data, user) {
             if (err) {
                 //error - could not get logged in user
@@ -61,7 +52,6 @@
             } else {
                 if (client.isLoggedIn()) {
                     appUser = user;
-                    loadItems();
                 }
             }
         });
@@ -70,7 +60,6 @@
         $('#form-login-user').on('click', '#btn-submit', login);
         $('#header-mylist').on('click', '#btn-logout', function() {
             client.logout();
-            $('#btn-submit').removeClass('hideaway');
         })
 
         function createUser() {
@@ -83,8 +72,7 @@
                     "name": username,
                     "email": "",
                     "username": username,
-                    "password": password,
-
+                    "password": password
                 }
             };
             client.request(options, function(err, data) {
@@ -115,6 +103,7 @@
                     if (err) {
                         $('#login-section-error').html('There was an error logging you in.');
                         console.log(err)
+                        $("#form-password").val('');
                     } else {
                         //login succeeded
                         client.getLoggedInUser(function(err, data, user) {
@@ -132,36 +121,31 @@
                         $("#form-password").val('');
 
                         window.location = "#page-main";
-                        loadItems();
                     }
                 }
             );
         }
 
-        // loadItems();
+        loadItems();
 
         function loadItems() {
-            myList.fetch(
+            items.fetch(
                 function(err, data) { // Success
                     if (err) {
                         alert("Read failed - loading offline data");
-                        myList = client.restoreCollection(localStorage.getItem('items'));
-                        myList.resetEntityPointer();
+                        items = client.restoreCollection(localStorage.getItem('items'));
+                        items.resetEntityPointer();
                         $('#bucketlist').empty();
-                        while (myList.hasNextEntity()) {
-                            var item = myList.getNextEntity();
-                            $('#bucketlist').append('<li><a href="#page-add" data-uuid=' + item.get('uuid') + '><h3>' + item.get('title') + '</h3></a></li>');
+                        while (items.hasNextEntity()) {
+                            var item = items.getNextEntity();
+                            $('#bucketlist').append('<li><a href="#page-add"><h3>' + item.get('title') + '</h3></a></li>')
                         }
                         $('#bucketlist').listview('refresh');
                     } else {
                         $('#bucketlist').empty();
-                        while (myList.hasNextEntity()) {
-                            var item = myList.getNextEntity();
-                            $('#bucketlist').append('<li><a href="#page-add" data-uuid=' + item.get('uuid') + '><h3>' + item.get('title') + '</h3></a></li>');
-                            var lookup = item.get('completedby');
-                            if ((lookup) && (lookup.indexOf(appUser.get('uuid')) > -1)) {
-                                $('#bucketlist li:last').addClass('done');
-                            }
+                        while (items.hasNextEntity()) {
+                            var item = items.getNextEntity();
+                            $('#bucketlist').append('<li><a href="#page-add"><h3>' + item.get('title') + '</h3></a></li>')
                         }
                         $('#bucketlist').listview('refresh');
                         localStorage.setItem('items', items.serialize());
@@ -179,90 +163,14 @@
                     if (error) {
                         alert("write failed");
                     } else {
-                        var options = {
-                            "type": "items",
-                            "uuid": response._data.uuid
-                        }
-                        client.getEntity(options, function(error, response) {
-                            appUser.connect("myitems", response, function(error, data) {
-                                if (error) {
-                                    alert("error!");
-                                } else {
-                                    console.log('here');
-                                    $('#form-title').val('');
-                                    $('#form-desc').val('');
-                                    loadItems();
-                                    history.back();
-                                }
-                            });
-                        });
-
-
+                        $('#form-title').val('');
+                        $('#form-desc').val('');
+                        loadItems();
+                        history.back();
                     }
                 });
             }
         });
-
-        $('#bucketlist').on('click', 'a', function(e) {
-            var options = {
-                "type": "items",
-                "uuid": $(this).attr('data-uuid')
-            };
-            client.getEntity(options, function(error, response) {
-                var title = response.get('title');
-                var desc = response.get('desc');
-                var completedby = response.get('completedby');
-                $('#form-title').val(title);
-                $('#form-desc').val(desc);
-                $('#form-uuid').val(options.uuid);
-                $('#form-completedby').val(completedby);
-            });
-            $('#btn-submit, #btn-cancel').addClass('hideaway');
-            $('#btn-did-it, #btn-forget-it').removeClass('hideaway');
-        });
-        $('#header-mylist').on('click', '#btn-new', function() {
-            $('#btn-submit, #btn-cancel').removeClass('hideaway');
-            $('#btn-did-it, #btn-forget-it').addClass('hideaway');
-            $('#form-title').val('');
-            $('#form-desc').val('');
-        });
-        $('#form-add-item').on('click', '#btn-did-it', function() {
-            var uuid = $('#form-uuid').val();
-            var completedby = ($('#form-completedby').val()).split(',');
-            completedby.push(appUser.get('uuid'));
-            var options = {
-                "client": client,
-                "data": {
-                    'type': 'items',
-                    'uuid': uuid,
-                    'completedby': completedby
-                }
-            };
-            var entry = new Apigee.Entity(options);
-            entry.save(function(error, response) {
-                if (error) {
-                    alert('could not write to the database')
-                } else {
-                    loadItems();
-                    window.location = "#page-main";
-                }
-            });
-        });
-        $("#form-add-item").on('click', '#btn-forget-it', function() {
-            var uuid = $('#form-uuid').val();
-            var options = {
-                "endpoint": "/users/me/myitems/" + uuid,
-                "method": "DELETE"
-            }
-            client.request(options, function(err, response) {
-                if (err) {
-                    alert("Unable to delete item");
-                } else {
-                    console.log('SUCCESS');
-                    window.location = "#page-main";
-                }
-            });
-        })
     });
     </script>
 </head>
@@ -325,11 +233,8 @@
                 <label for="form-desc">More Info:</label>
                 <textarea name="" id="form-desc" placeholder="Add any additional information here..."></textarea>
                 <input id="form-uuid" type="hidden" />
-                <input id="form-completedby" type="hidden" />
                 <a id="btn-cancel" data-role="button" data-icon="delete" href="#page-main">Cancel</a>
                 <a id="btn-submit" data-role="button" data-icon="plus">Submit</a>
-                <a id="btn-did-it" class="hideaway" data-role="button" data-icon="check" href="#page-main">I did it!</a>
-                <a id="btn-forget-it" class="hideaway" data-role="button" data-icon="trash" href="#page-main">Forget it!</a>
             </form>
         </article>
         <!-- /content -->
